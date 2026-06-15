@@ -156,7 +156,7 @@ function App(){
 
   // Si no hay config → onboarding
   if(!cfg){
-    return <Onboarding onDone={c=>{const conf={...c};ss("cj2:cfg",conf);setCfg(conf);}}/>;
+    return <Onboarding onDone={c=>{ss("cj2:cfg",c);window.location.reload();}}/>;
   }
 
   // ── Cálculos ──
