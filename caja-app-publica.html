@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<title>Caja — Facturas e IVA</title>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;1,6..72,300;1,6..72,400&family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black"/>
+<meta name="apple-mobile-web-app-title" content="Caja"/>
+<meta name="theme-color" content="#080808"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+html,body{min-height:100%;background:#080808;}
+body{
+  font-family:'Hanken Grotesk','Helvetica Neue',sans-serif;
+  color:#fff;
+  padding-top:max(env(safe-area-inset-top),50px);
+  padding-bottom:max(env(safe-area-inset-bottom),24px);
+}
+*{--bg:#080808;--card:#141414;--card2:#1C1C1C;
+  --ink:#fff;--muted:rgba(255,255,255,.38);--border:rgba(255,255,255,.08);
+  --red:#FF5A5A;--green:#00C48C;--amber:#FFB020;--blue:#4D9EFF;--purple:#C084FC;
+  --red-bg:rgba(255,90,90,.1);--green-bg:rgba(0,196,140,.1);
+  --amber-bg:rgba(255,176,32,.1);--blue-bg:rgba(77,158,255,.1);}
+button{cursor:pointer;font-family:inherit;}
+input,select{font-family:inherit;outline:none;}
+input:focus,select:focus{border-color:rgba(255,255,255,.4)!important;}
+::placeholder{color:rgba(255,255,255,.18);}
+::-webkit-scrollbar{height:2px;width:2px;}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:9999px;}
+
+.tab{border:none;background:transparent;font-weight:600;font-size:11px;color:var(--muted);padding:10px 10px;border-bottom:1.5px solid transparent;margin-bottom:-1px;transition:color .2s,border-color .2s;white-space:nowrap;}
+.tab.on{color:#fff;border-color:#fff;}
+.card{background:var(--card);border:1px solid var(--border);border-radius:18px;padding:20px;}
+.pill{display:inline-flex;align-items:center;padding:2px 8px;border-radius:9999px;font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap;}
+.inp{border:1px solid var(--border);border-radius:10px;padding:11px 13px;font-size:14px;color:#fff;background:rgba(255,255,255,.04);width:100%;}
+.btn-w{border:none;background:#fff;color:#000;font-weight:700;font-size:14px;padding:13px 0;border-radius:10px;width:100%;}
+.btn-w:active{transform:scale(.98);}
+.btn-g{border:1px solid var(--border);background:transparent;font-weight:600;font-size:12px;padding:9px 0;border-radius:9px;color:var(--muted);transition:all .15s;}
+.btn-g.on{background:rgba(255,255,255,.1);color:#fff;border-color:rgba(255,255,255,.2);}
+.row{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 15px;margin-bottom:8px;}
+.del{border:none;background:transparent;color:rgba(255,255,255,.2);font-size:20px;line-height:1;flex-shrink:0;padding:0 2px;}
+.del:hover{color:var(--red);}
+.mh{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);display:flex;justify-content:space-between;align-items:baseline;margin:18px 2px 8px;}
+.sb{border-top:1px solid var(--border);padding:10px 0;}
+.sl{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin-bottom:4px;}
+.sv{font-family:'JetBrains Mono',monospace;font-size:16px;letter-spacing:-.01em;line-height:1;}
+.chk{width:20px;height:20px;border-radius:6px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:12px;transition:all .2s;}
+.add-btn{border:1px dashed rgba(255,255,255,.15);background:transparent;border-radius:14px;padding:14px;font-size:13px;font-weight:600;color:var(--muted);width:100%;}
+.btn-cancel{border:1px solid var(--border);background:transparent;border-radius:10px;font-size:14px;font-weight:600;color:var(--muted);}
+.empty{text-align:center;padding:36px 20px;}
+.empty-t{font-family:'Newsreader',serif;font-size:18px;font-style:italic;font-weight:300;color:var(--muted);margin-bottom:6px;}
+.empty-s{font-size:12px;color:var(--muted);}
+.glow{position:absolute;border-radius:50%;filter:blur(50px);pointer-events:none;}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const{useState,useEffect,useMemo,useRef}=React;
+const CLP=n=>new Intl.NumberFormat("es-CL",{style:"currency",currency:"CLP",maximumFractionDigits:0}).format(Math.round(n||0));
+const uid=()=>Math.random().toString(36).slice(2,9);
+const hoy=()=>{const n=new Date();return new Date(n.getFullYear(),n.getMonth(),n.getDate());};
+const todayISO=()=>{const n=new Date();return`${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,"0")}-${String(n.getDate()).padStart(2,"0")}`;};
+const parseLocal=iso=>{if(!iso)return new Date();const[y,m,d]=iso.split("-").map(Number);return new Date(y,m-1,d);};
+const diasHasta=d=>{const t=new Date(d.getFullYear(),d.getMonth(),d.getDate());return Math.round((t-hoy())/86400000);};
+const addDays=(iso,n)=>{const[y,m,d]=iso.split("-").map(Number);return new Date(y,m-1,d+n);};
+const fmtDate=d=>d.toLocaleDateString("es-CL",{day:"numeric",month:"short"});
+const monthKey=d=>(d||"").slice(0,7);
+const MESES=["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+const mesLabel=k=>{const[y,m]=k.split("-");return`${MESES[+m-1]} ${y}`;};
+const cap=s=>s.charAt(0).toUpperCase()+s.slice(1);
+const f29Vence=k=>{let[y,m]=k.split("-").map(Number);m++;if(m>12){m=1;y++;}return new Date(y,m-1,20);};
+
+// Tasas Chile 2026
+const TIPOS_DOC={
+  factura:{label:"Factura electrónica",tasa:0.19,etiqueta:"IVA 19%",color:"#4D9EFF",genera_iva:true},
+  boleta:{label:"Boleta de honorarios",tasa:0.1525,etiqueta:"Retención 15,25%",color:"#C084FC",genera_iva:false},
+};
+
+function sg(k,fb){try{const r=localStorage.getItem(k);return r?JSON.parse(r):fb;}catch{return fb;}}
+function ss(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch{}}
+
+const TONE={
+  green:{bg:"rgba(0,196,140,.1)",c:"#00C48C"},
+  red:{bg:"rgba(255,90,90,.1)",c:"#FF5A5A"},
+  amber:{bg:"rgba(255,176,32,.1)",c:"#FFB020"},
+  blue:{bg:"rgba(77,158,255,.1)",c:"#4D9EFF"},
+  purple:{bg:"rgba(192,132,252,.1)",c:"#C084FC"},
+  gray:{bg:"rgba(255,255,255,.05)",c:"rgba(255,255,255,.38)"},
+};
+function Pill({tone="gray",children}){const t=TONE[tone];return <span className="pill" style={{background:t.bg,color:t.c}}>{children}</span>;}
+function Stat({label,value,color,note}){return <div className="sb"><div className="sl">{label}</div><div className="sv" style={{color:color||"#fff"}}>{value}</div>{note&&<div style={{fontSize:10,color:"var(--muted)",marginTop:2}}>{note}</div>}</div>;}
+
+/* ══════════════════════════════
+   ONBOARDING — solo nombre y RUT
+   ══════════════════════════════ */
+function Onboarding({onDone}){
+  const[empresa,setEmpresa]=useState("");
+  const[rut,setRut]=useState("");
+  const go=()=>{if(!empresa.trim())return;onDone({empresa:empresa.trim(),rut:rut.trim()});};
+  return(
+    <div style={{minHeight:"100vh",background:"#080808",display:"flex",alignItems:"center",justifyContent:"center",padding:"0 24px"}}>
+      <div style={{width:"100%",maxWidth:360}}>
+        {/* Logo */}
+        <div style={{textAlign:"center",marginBottom:40}}>
+          <div style={{width:56,height:56,borderRadius:16,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 20px"}}>
+            <span style={{fontFamily:"'Newsreader',serif",fontSize:30,fontStyle:"italic",color:"#000",fontWeight:300}}>C</span>
+          </div>
+          <h1 style={{fontFamily:"'Newsreader',serif",fontSize:30,fontStyle:"italic",fontWeight:300,color:"#fff",marginBottom:10}}>Caja</h1>
+          <p style={{fontSize:13,color:"rgba(255,255,255,.38)",lineHeight:1.7}}>Control de facturas, IVA y gastos.<br/>Tus datos se guardan solo en este dispositivo.</p>
+        </div>
+        {/* Form */}
+        <div style={{display:"grid",gap:12}}>
+          <div>
+            <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:9,letterSpacing:".1em",textTransform:"uppercase",color:"rgba(255,255,255,.38)",marginBottom:7}}>Nombre empresa o persona</div>
+            <input className="inp" placeholder="Ej: Mi Empresa SpA" value={empresa} onChange={e=>setEmpresa(e.target.value)} autoFocus onKeyDown={e=>e.key==="Enter"&&go()}/>
+          </div>
+          <div>
+            <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:9,letterSpacing:".1em",textTransform:"uppercase",color:"rgba(255,255,255,.38)",marginBottom:7}}>RUT <span style={{opacity:.5}}>(opcional)</span></div>
+            <input className="inp" placeholder="Ej: 77.417.402-8" value={rut} onChange={e=>setRut(e.target.value)} onKeyDown={e=>e.key==="Enter"&&go()}/>
+          </div>
+          <button className="btn-w" style={{marginTop:8,opacity:empresa.trim()?1:.4}} onClick={go}>
+            Comenzar →
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════
+   APP PRINCIPAL
+   ══════════════════════════════ */
+function App(){
+  const[cfg,setCfg]=useState(()=>sg("cj2:cfg",null));
+  const[tab,setTab]=useState("dash");
+  const[fac,setFac]=useState(()=>sg("cj2:fac",[]));
+  const[com,setCom]=useState(()=>sg("cj2:com",[]));
+  const[cob,setCob]=useState(()=>sg("cj2:cob",[]));
+  const[meta,setMeta]=useState(()=>sg("cj2:meta",{}));
+  const[gf,setGf]=useState(()=>sg("cj2:gf",[]));
+  const[gfm,setGfm]=useState(()=>sg("cj2:gfm",{}));
+
+  useEffect(()=>{if(cfg)ss("cj2:cfg",cfg);},[cfg]);
+  useEffect(()=>{ss("cj2:fac",fac);},[fac]);
+  useEffect(()=>{ss("cj2:com",com);},[com]);
+  useEffect(()=>{ss("cj2:cob",cob);},[cob]);
+  useEffect(()=>{ss("cj2:meta",meta);},[meta]);
+  useEffect(()=>{ss("cj2:gf",gf);},[gf]);
+  useEffect(()=>{ss("cj2:gfm",gfm);},[gfm]);
+
+  // Si no hay config → onboarding
+  if(!cfg){
+    return <Onboarding onDone={c=>{const conf={...c};ss("cj2:cfg",conf);setCfg(conf);}}/>;
+  }
+
+  // ── Cálculos ──
+  const meses=useMemo(()=>{
+    const s=new Set([...fac,...com,...cob].map(x=>monthKey(x.fecha)).filter(Boolean));
+    return[...s].sort().reverse();
+  },[fac,com,cob]);
+
+  // Solo facturas (no boletas) generan IVA débito
+  const ivaD=k=>fac.filter(f=>monthKey(f.fecha)===k&&f.tipo!=="boleta").reduce((s,f)=>s+f.impuesto,0);
+  const ivaC=k=>com.filter(c=>monthKey(c.fecha)===k).reduce((s,c)=>s+c.iva,0);
+  const ivaN=k=>Math.max(0,ivaD(k)-ivaC(k));
+  const totFac=k=>fac.filter(f=>monthKey(f.fecha)===k).reduce((s,f)=>s+f.bruto,0);
+  const totCob=k=>cob.filter(c=>monthKey(c.fecha)===k).reduce((s,c)=>s+c.monto,0);
+  const setMes=(k,p)=>setMeta(m=>({...m,[k]:{...(m[k]||{}),...p}}));
+  const setGfPago=(id,mes,val)=>setGfm(m=>({...m,[mes]:{...(m[mes]||{}),[id]:val}}));
+
+  const ivaPend=meses.filter(k=>ivaN(k)>0&&!meta[k]?.ivaPagado).reduce((s,k)=>s+ivaN(k),0);
+  const proxV=useMemo(()=>{
+    const p=meses.filter(k=>ivaN(k)>0&&!meta[k]?.ivaPagado).sort();
+    if(!p.length)return null;
+    const k=p[0];const d=f29Vence(k);return{key:k,fecha:d,dias:diasHasta(d),monto:ivaN(k)};
+  },[meses,meta,fac,com]);
+
+  const exportCSV=()=>{
+    const rows=[["Tipo doc","Fecha","Concepto","Neto","Impuesto","Total","Genera IVA"]];
+    fac.forEach(f=>rows.push([f.tipo==="boleta"?"Boleta honorarios":"Factura",f.fecha,f.cliente,f.neto,f.impuesto,f.bruto,f.tipo!=="boleta"?"Sí":"No (retención)"]));
+    const csv=rows.map(r=>r.map(v=>`"${v}"`).join(",")).join("\n");
+    const a=document.createElement("a");
+    a.href="data:text/csv;charset=utf-8,\uFEFF"+encodeURIComponent(csv);
+    a.download=`caja-${todayISO()}.csv`;a.click();
+  };
+
+  const resetTodo=()=>{
+    if(!window.confirm("¿Borrar TODOS tus datos? No se puede deshacer."))return;
+    ["cj2:cfg","cj2:fac","cj2:com","cj2:cob","cj2:meta","cj2:gf","cj2:gfm"].forEach(k=>localStorage.removeItem(k));
+    setCfg(null);setFac([]);setCom([]);setCob([]);setMeta({});setGf([]);setGfm({});
+  };
+
+  const now=new Date();
+  const TABS=[["dash","Dashboard"],["gf","Gastos fijos"],["fac","Facturas"],["cal","Cobros"],["ent","Entradas"],["com","Compras"]];
+
+  return(
+    <div style={{background:"#080808",minHeight:"100vh"}}>
+      <div style={{maxWidth:700,margin:"0 auto",padding:"0 16px"}}>
+        <header style={{paddingBottom:0}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
+            <div>
+              <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:9,letterSpacing:".12em",textTransform:"uppercase",color:"rgba(255,255,255,.38)",marginBottom:5}}>
+                {cfg.empresa}{cfg.rut?` · ${cfg.rut}`:""}
+              </div>
+              <h1 style={{fontFamily:"'Newsreader',serif",fontSize:26,fontWeight:300,fontStyle:"italic",color:"#fff",letterSpacing:"-.03em",lineHeight:1}}>Mis finanzas</h1>
+            </div>
+            <div style={{textAlign:"right",paddingTop:2}}>
+              <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:"rgba(255,255,255,.38)"}}>{now.toLocaleDateString("es-CL",{day:"numeric",month:"short",year:"numeric"})}</div>
+              {proxV&&<div style={{marginTop:5}}>
+                {proxV.dias<0?<Pill tone="red">F29 vencido</Pill>:proxV.dias<=7?<Pill tone="amber">F29 {proxV.dias}d</Pill>:<Pill tone="blue">F29 {proxV.dias}d</Pill>}
+              </div>}
+            </div>
+          </div>
+          <nav style={{display:"flex",borderBottom:"1px solid rgba(255,255,255,.08)",overflowX:"auto",gap:0}}>
+            {TABS.map(([id,l])=><button key={id} className={`tab${tab===id?" on":""}`} onClick={()=>setTab(id)}>{l}</button>)}
+          </nav>
+        </header>
+
+        <main style={{paddingTop:20,paddingBottom:60}}>
+          {tab==="dash"&&<Dashboard meses={meses} ivaD={ivaD} ivaC={ivaC} ivaN={ivaN} totFac={totFac} totCob={totCob} meta={meta} setMes={setMes} proxV={proxV} ivaPend={ivaPend} exportCSV={exportCSV} resetTodo={resetTodo}/>}
+          {tab==="gf"&&<GastosFijos gf={gf} setGf={setGf} gfm={gfm} setGfPago={setGfPago}/>}
+          {tab==="fac"&&<Facturas fac={fac} setFac={setFac}/>}
+          {tab==="cal"&&<Calendario fac={fac} cob={cob}/>}
+          {tab==="ent"&&<Entradas cob={cob} setCob={setCob}/>}
+          {tab==="com"&&<Compras com={com} setCom={setCom}/>}
+        </main>
+      </div>
+    </div>
+  );
+}
+
+/* ══ DASHBOARD ══ */
+function Dashboard({meses,ivaD,ivaC,ivaN,totFac,totCob,meta,setMes,proxV,ivaPend,exportCSV,resetTodo}){
+  return <div style={{display:"grid",gap:12}}>
+    <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:12}}>
+      <div style={{background:"linear-gradient(135deg,#0F0F0F,#1A1A1A)",border:"1px solid rgba(255,255,255,.08)",borderRadius:20,padding:22,position:"relative",overflow:"hidden"}}>
+        <div className="glow" style={{top:-40,right:-40,width:180,height:180,background:ivaPend>0?"rgba(255,90,90,.08)":"rgba(0,196,140,.08)"}}/>
+        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:9,letterSpacing:".12em",textTransform:"uppercase",color:"rgba(255,255,255,.38)",marginBottom:10}}>IVA por pagar</div>
+        <div style={{fontFamily:"'Newsreader',serif",fontSize:32,fontStyle:"italic",fontWeight:300,color:ivaPend>0?"#FF5A5A":"#00C48C",letterSpacing:"-.03em",lineHeight:1}}>{CLP(ivaPend)}</div>
+        <div style={{fontSize:10,color:"rgba(255,255,255,.35)",marginTop:8,lineHeight:1.5}}>
+          {ivaPend>0?meses.filter(k=>ivaN(k)>0&&!meta[k]?.ivaPagado).map(k=>mesLabel(k)).join(", "):"Todo al día ✓"}
+        </div>
+      </div>
+      <div className="card" style={{borderRadius:20}}>
+        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:9,letterSpacing:".12em",textTransform:"uppercase",color:"rgba(255,255,255,.38)",marginBottom:10}}>Próximo F29</div>
+        {proxV?<>
+          <div style={{fontFamily:"'Newsreader',serif",fontSize:18,fontStyle:"italic",fontWeight:300,color:"#fff",lineHeight:1.2}}>20 {MESES[proxV.fecha.getMonth()]}</div>
+          <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:"#FF5A5A",marginTop:8}}>{CLP(proxV.monto)}</div>
+          <div style={{marginTop:10}}>
+            {proxV.dias<0?<Pill tone="red">Vencido</Pill>:proxV.dias<=7?<Pill tone="amber">{proxV.dias}d</Pill>:<Pill tone="blue">{proxV.dias}d</Pill>}
+          </div>
+        </>:<div style={{fontSize:12,color:"rgba(255,255,255,.38)",marginTop:8}}>Sin pendientes ✓</div>}
+      </div>
+    </div>
+
+    {meses.length===0&&<div className="card empty" style={{borderRadius:20}}>
+      <div className="empty-t">Sin registros aún</div>
+      <div className="empty-s">Agrega tu primera factura o boleta en la pestaña "Facturas".</div>
+    </div>}
+
+    {meses.map(k=>{
+      const m=meta[k]||{};const vence=f29Vence(k);const dias=diasHasta(vence);
+      const facMes=k; // para scope
+      return <div key={k} className="card" style={{borderRadius:20}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:16}}>
+          <h2 style={{fontFamily:"'Newsreader',serif",fontSize:20,fontStyle:"italic",fontWeight:300,color:"#fff"}}>{cap(mesLabel(k))}</h2>
+          <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:9,color:"rgba(255,255,255,.38)"}}>F29 20 {MESES[vence.getMonth()]}</span>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)"}}>
+          <Stat label="Facturado" value={CLP(totFac(k))}/>
+          <Stat label="IVA débito" value={CLP(ivaD(k))} color="#FF5A5A" note="solo facturas"/>
+          <Stat label="IVA crédito" value={CLP(ivaC(k))} color="#00C48C" note={ivaC(k)>0?"proveedores":"—"}/>
+          <Stat label="A pagar SII" value={CLP(ivaN(k))} color={ivaN(k)>0?"#FF5A5A":"#00C48C"}/>
+        </div>
+        <div style={{borderTop:"1px solid rgba(255,255,255,.08)",marginTop:12,paddingTop:12}}>
+          <Stat label="Total cobrado" value={CLP(totCob(k))} color="#00C48C"/>
+        </div>
+        <div style={{display:"flex",gap:8,marginTop:14,alignItems:"center",flexWrap:"wrap"}}>
+          <button onClick={()=>setMes(k,{ivaPagado:!m.ivaPagado})}
+            style={{display:"inline-flex",alignItems:"center",gap:6,border:"1px solid rgba(255,255,255,.08)",background:m.ivaPagado?"rgba(0,196,140,.15)":"transparent",color:m.ivaPagado?"#00C48C":"rgba(255,255,255,.38)",fontSize:12,fontWeight:600,padding:"7px 13px",borderRadius:8}}>
+            {m.ivaPagado?"✓ IVA pagado":"Marcar IVA pagado"}
+          </button>
+          {!m.ivaPagado&&ivaN(k)>0&&(dias<0?<Pill tone="red">Vencido</Pill>:dias<=5?<Pill tone="amber">Urgente</Pill>:<Pill tone="gray">Pendiente</Pill>)}
+          {m.ivaPagado&&<Pill tone="green">Pagado</Pill>}
+        </div>
+      </div>;
+    })}
+
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginTop:4}}>
+      <button onClick={exportCSV} style={{border:"1px solid rgba(255,255,255,.08)",background:"transparent",borderRadius:12,padding:"13px",fontSize:12,fontWeight:600,color:"rgba(255,255,255,.38)"}}>↓ Exportar CSV</button>
+      <button onClick={resetTodo} style={{border:"1px solid rgba(255,90,90,.2)",background:"transparent",borderRadius:12,padding:"13px",fontSize:12,fontWeight:600,color:"#FF5A5A"}}>Borrar todo</button>
+    </div>
+  </div>;
+}
+
+/* ══ GASTOS FIJOS ══ */
+function GastosFijos({gf,setGf,gfm,setGfPago}){
+  const[sf,setSf]=useState(false);
+  const[nombre,setNombre]=useState("");const[monto,setMonto]=useState("");
+  const[dia,setDia]=useState("");const[freq,setFreq]=useState("mensual");
+  const[nota,setNota]=useState("");const[deuda,setDeuda]=useState(false);
+  const n=new Date();
+  const mes=`${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,"0")}`;
+  const mm=gfm[mes]||{};
+  const add=()=>{const v=Number(String(monto).replace(/[^\d]/g,""));if(!v||!nombre.trim())return;setGf(a=>[...a,{id:uid(),nombre:nombre.trim(),monto:v,dia:dia?Number(dia):null,freq,nota:nota.trim(),deuda}]);setNombre("");setMonto("");setDia("");setNota("");setDeuda(false);setSf(false);};
+  const del=id=>{if(window.confirm("¿Eliminar?"))setGf(a=>a.filter(g=>g.id!==id));};
+  const ce=gf.map(g=>{const pagado=!!mm[g.id];let urgente=false,vencida=false;if(g.dia){const[y,m2]=mes.split("-").map(Number);const vd=new Date(y,m2-1,g.dia);const d=diasHasta(vd);urgente=d>=0&&d<=5&&!pagado;vencida=d<0&&!pagado;}return{...g,pagado,urgente,vencida};});
+  const total=gf.reduce((s,g)=>s+g.monto,0);
+  const pag=ce.filter(g=>g.pagado).reduce((s,g)=>s+g.monto,0);
+  const pct=total>0?Math.round(pag/total*100):0;
+
+  return <div style={{display:"grid",gap:10}}>
+    {gf.length>0&&<div style={{background:"linear-gradient(135deg,#0F0F0F,#1A1A1A)",border:"1px solid rgba(255,255,255,.08)",borderRadius:20,padding:20,position:"relative",overflow:"hidden"}}>
+      <div className="glow" style={{top:-30,right:-30,width:140,height:140,background:"rgba(192,132,252,.06)"}}/>
+      <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:9,letterSpacing:".12em",textTransform:"uppercase",color:"rgba(255,255,255,.38)",marginBottom:14}}>{cap(mesLabel(mes))} · gastos fijos</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:14,marginBottom:16}}>
+        {[{l:"Total",v:CLP(total),c:"rgba(255,255,255,.5)"},{l:"Pagado",v:CLP(pag),c:"#00C48C"},{l:"Pendiente",v:CLP(total-pag),c:total-pag>0?"#FF5A5A":"#00C48C"}].map(({l,v,c})=>
+          <div key={l}><div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:9,color:"rgba(255,255,255,.35)",letterSpacing:".07em",textTransform:"uppercase",marginBottom:4}}>{l}</div><div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:16,color:c}}>{v}</div></div>
+        )}
+      </div>
+      <div style={{height:2,background:"rgba(255,255,255,.06)",borderRadius:9999,overflow:"hidden"}}>
+        <div style={{height:"100%",width:`${pct}%`,background:"#00C48C",borderRadius:9999,transition:"width .7s cubic-bezier(.32,.72,0,1)"}}/>
+      </div>
+      <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:9,color:"rgba(255,255,255,.3)",marginTop:7,textAlign:"right"}}>{pct}% pagado</div>
+    </div>}
+
+    {gf.length===0&&!sf&&<div className="card empty" style={{borderRadius:20}}><div className="empty-t">Sin gastos fijos</div><div className="empty-s">Agrega suscripciones, servicios y pagos mensuales.</div></div>}
+
+    {ce.map(g=>{
+      const bc=g.pagado?"rgba(0,196,140,.12)":(g.vencida||g.deuda)?"rgba(255,90,90,.1)":"var(--card)";
+      const bdr=g.pagado?"rgba(0,196,140,.2)":(g.vencida||g.deuda)?"rgba(255,90,90,.2)":"rgba(255,255,255,.08)";
+      const fc=g.pagado?"#00C48C":(g.vencida||g.deuda)?"#FF5A5A":"#fff";
+      return <div key={g.id} style={{background:bc,border:`1px solid ${bdr}`,borderRadius:14,padding:"14px 16px"}}>
+        <div style={{display:"flex",alignItems:"center",gap:12}}>
+          <button className="chk" onClick={()=>setGfPago(g.id,mes,!g.pagado)} style={{border:`1.5px solid ${g.pagado?"#00C48C":"rgba(255,255,255,.15)"}`,background:g.pagado?"#00C48C":"transparent",color:"#000"}}>{g.pagado?"✓":""}</button>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontWeight:700,fontSize:14,color:fc,letterSpacing:"-.01em"}}>{g.nombre}</div>
+            <div style={{display:"flex",gap:6,marginTop:5,flexWrap:"wrap",alignItems:"center"}}>
+              {g.dia&&<span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:9,color:"rgba(255,255,255,.35)"}}>día {g.dia}</span>}
+              <Pill tone={g.freq==="mensual"?"gray":"purple"}>{g.freq}</Pill>
+              {g.deuda&&!g.pagado&&<Pill tone="red">en deuda</Pill>}
+              {g.vencida&&!g.deuda&&<Pill tone="amber">vencida</Pill>}
+              {g.urgente&&<Pill tone="amber">vence pronto</Pill>}
+              {g.nota&&<span style={{fontSize:10,color:"rgba(255,255,255,.35)"}}>{g.nota}</span>}
+            </div>
+          </div>
+          <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:15,fontWeight:500,color:fc,flexShrink:0}}>{CLP(g.monto)}</div>
+          <button className="del" onClick={()=>del(g.id)}>×</button>
+        </div>
+      </div>;
+    })}
+
+    {!sf&&<button className="add-btn" onClick={()=>setSf(true)}>+ Agregar gasto fijo</button>}
+    {sf&&<div className="card" style={{borderRadius:16}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:9,letterSpacing:".1em",textTransform:"uppercase",color:"rgba(255,255,255,.38)"}}>Nuevo gasto fijo</div>
+        <button onClick={()=>setSf(false)} style={{border:"none",background:"transparent",fontSize:22,color:"rgba(255,255,255,.38)",lineHeight:1}}>×</button>
+      </div>
+      <div style={{display:"grid",gap:10}}>
+        <input className="inp" placeholder="Nombre (ej: Netflix, Starlink...)" value={nombre} onChange={e=>setNombre(e.target.value)} autoFocus/>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          <input className="inp" inputMode="numeric" placeholder="Monto $" value={monto} onChange={e=>setMonto(e.target.value)} style={{fontFamily:"'JetBrains Mono',monospace"}}/>
+          <input className="inp" inputMode="numeric" placeholder="Día de cobro" value={dia} onChange={e=>setDia(e.target.value)}/>
+        </div>
+        <div style={{display:"flex",gap:6}}>
+          {["mensual","semestral","anual"].map(f=><button key={f} className={`btn-g${freq===f?" on":""}`} onClick={()=>setFreq(f)} style={{flex:1}}>{f}</button>)}
+        </div>
+        <input className="inp" placeholder="Nota (opcional)" value={nota} onChange={e=>setNota(e.target.value)}/>
+        <label style={{display:"flex",alignItems:"center",gap:8,fontSize:12,color:"rgba(255,255,255,.38)",cursor:"pointer"}}>
+          <input type="checkbox" checked={deuda} onChange={e=>setDeuda(e.target.checked)} style={{width:16,height:16}}/>Marcar como deuda pendiente
+        </label>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          <button className="btn-w" onClick={add}>Agregar</button>
+          <button className="btn-cancel" onClick={()=>setSf(false)}>Cancelar</button>
+        </div>
+      </div>
+    </div>}
+  </div>;
+}
+
+/* ══ FACTURAS ══ */
+function Facturas({fac,setFac}){
+  const[sf,setSf]=useState(false);
+  const[fecha,setFecha]=useState(todayISO());
+  const[cliente,setCliente]=useState("");
+  const[numero,setNumero]=useState("");
+  const[monto,setMonto]=useState("");
+  const[modo,setModo]=useState("neto"); // neto | bruto
+  const[tipo,setTipo]=useState("factura"); // factura | boleta
+  const fileRef=useRef();
+
+  const td=TIPOS_DOC[tipo];
+
+  const add=()=>{
+    const v=Number(String(monto).replace(/[^\d]/g,""));
+    if(!v||!cliente.trim())return;
+    let neto,impuesto,bruto;
+    if(modo==="neto"){neto=v;impuesto=Math.round(v*td.tasa);bruto=v+impuesto;}
+    else{bruto=v;neto=Math.round(v/(1+td.tasa));impuesto=bruto-neto;}
+    setFac(a=>[{id:uid(),fecha,cliente:cliente.trim(),numero:numero.trim(),tipo,neto,impuesto,bruto},...a]);
+    setCliente("");setNumero("");setMonto("");setSf(false);
+  };
+  const del=id=>{if(window.confirm("¿Eliminar?"))setFac(a=>a.filter(f=>f.id!==id));};
+
+  const importCSV=e=>{
+    const file=e.target.files[0];if(!file)return;
+    const reader=new FileReader();
+    reader.onload=ev=>{
+      const lines=ev.target.result.split("\n").filter(l=>l.trim());
+      const nuevas=[];
+      lines.forEach((line,i)=>{
+        if(i===0&&line.toLowerCase().includes("fecha"))return;
+        const cols=line.split(",").map(c=>c.replace(/"/g,"").trim());
+        const f=cols[0]||todayISO();
+        const cli=cols[1]||cols[2]||"Importado";
+        const neto=Number(String(cols[3]||"0").replace(/[^\d]/g,""));
+        if(!neto)return;
+        const impuesto=Math.round(neto*0.19);
+        nuevas.push({id:uid(),fecha:f,cliente:cli,numero:cols[2]||"",tipo:"factura",neto,impuesto,bruto:neto+impuesto});
+      });
+      if(nuevas.length)setFac(a=>[...nuevas,...a]);
+      alert(`${nuevas.length} facturas importadas.`);
+    };
+    reader.readAsText(file);e.target.value="";
+  };
+
+  const prev=useMemo(()=>{
+    const v=Number(String(monto).replace(/[^\d]/g,""))||0;
+    const neto=modo==="neto"?v:Math.round(v/(1+td.tasa));
+    const impuesto=Math.round(neto*td.tasa);
+    return{neto,impuesto,bruto:neto+impuesto};
+  },[monto,modo,tipo]);
+
+  const grupos=useMemo(()=>{
+    const g={};fac.forEach(f=>{const k=monthKey(f.fecha);(g[k]=g[k]||[]).push(f);});
+    return Object.keys(g).sort().reverse().map(k=>[k,g[k]]);
+  },[fac]);
+
+  return <div style={{display:"grid",gap:12}}>
+    {/* Nota IVA vs Boleta */}
+    <div style={{background:"rgba(255,255,255,.03)",border:"1px solid rgba(255,255,255,.06)",borderRadius:12,padding:"12px 15px",fontSize:11,color:"rgba(255,255,255,.4)",lineHeight:1.7}}>
+      <strong style={{color:"#4D9EFF"}}>Factura electrónica</strong> → genera IVA débito (19%) que pagas al SII en el F29.<br/>
+      <strong style={{color:"#C084FC"}}>Boleta de honorarios</strong> → el cliente retiene el 15,25% y lo paga al SII por ti. No genera IVA.
+    </div>
+
+    {!sf&&<button className="btn-w" style={{borderRadius:12,padding:"13px"}} onClick={()=>setSf(true)}>+ Nueva factura / boleta</button>}
+
+    {!sf&&<>
+      <input ref={fileRef} type="file" accept=".csv,.txt" onChange={importCSV} style={{display:"none"}}/>
+      <button onClick={()=>fileRef.current.click()} style={{border:"1px dashed rgba(255,255,255,.15)",background:"transparent",borderRadius:10,padding:"12px",fontSize:12,fontWeight:600,color:"rgba(255,255,255,.38)",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+        ↑ Importar CSV (Fecha, Concepto, N° doc, Neto)
+      </button>
+    </>}
+
+    {sf&&<div className="card" style={{borderRadius:16}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:9,letterSpacing:".1em",textTransform:"uppercase",color:"rgba(255,255,255,.38)"}}>Nuevo documento</div>
+        <button onClick={()=>setSf(false)} style={{border:"none",background:"transparent",fontSize:22,color:"rgba(255,255,255,.38)",lineHeight:1}}>×</button>
+      </div>
+      <div style={{display:"grid",gap:10}}>
+        {/* TIPO DE DOCUMENTO — lo más importante */}
+        <div>
+          <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:9,letterSpacing:".1em",textTransform:"uppercase",color:"rgba(255,255,255,.38)",marginBottom:8}}>Tipo de documento</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+            {Object.entries(TIPOS_DOC).map(([k,v])=>(
+              <button key={k} onClick={()=>setTipo(k)}
+                style={{border:`1px solid ${tipo===k?v.color:"rgba(255,255,255,.08)"}`,background:tipo===k?`${v.color}18`:"transparent",borderRadius:10,padding:"12px 10px",cursor:"pointer",textAlign:"left",transition:"all .15s"}}>
+                <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:9,color:tipo===k?v.color:"rgba(255,255,255,.38)",letterSpacing:".06em",textTransform:"uppercase",marginBottom:4}}>{v.etiqueta}</div>
+                <div style={{fontSize:12,fontWeight:600,color:tipo===k?"#fff":"rgba(255,255,255,.5)",lineHeight:1.3}}>{v.label}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <input className="inp" placeholder="Cliente / concepto" value={cliente} onChange={e=>setCliente(e.target.value)} autoFocus/>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          <input className="inp" type="date" value={fecha} onChange={e=>setFecha(e.target.value)}/>
+          <input className="inp" placeholder="N° documento" value={numero} onChange={e=>setNumero(e.target.value)}/>
+        </div>
+        <div style={{display:"flex",gap:6}}>
+          {[["neto","Monto neto"],["bruto","Total cobrado"]].map(([id,l])=>(
+            <button key={id} className={`btn-g${modo===id?" on":""}`} onClick={()=>setModo(id)} style={{flex:1}}>{l}</button>
+          ))}
+        </div>
+        <input className="inp" inputMode="numeric"
+          placeholder={modo==="neto"?`Monto neto (sin ${td.etiqueta})`:`Total ${tipo==="boleta"?"cobrado antes de retención":"con IVA"}`}
+          value={monto} onChange={e=>setMonto(e.target.value)} style={{fontFamily:"'JetBrains Mono',monospace"}}/>
+        {monto&&<div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:"rgba(255,255,255,.4)",background:"rgba(255,255,255,.03)",padding:"10px 13px",borderRadius:9,lineHeight:1.8}}>
+          Neto {CLP(prev.neto)}  ·  {td.etiqueta} {CLP(prev.impuesto)}  ·  Total {CLP(prev.bruto)}
+          {tipo==="boleta"&&<><br/><span style={{color:"#C084FC"}}>El cliente te paga {CLP(prev.neto)} y retiene {CLP(prev.impuesto)} al SII</span></>}
+        </div>}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          <button className="btn-w" onClick={add}>Agregar</button>
+          <button className="btn-cancel" onClick={()=>setSf(false)}>Cancelar</button>
+        </div>
+      </div>
+    </div>}
+
+    {fac.length===0&&!sf&&<div className="card empty" style={{borderRadius:16}}><div className="empty-t">Sin facturas aún</div><div className="empty-s">Toca "+ Nueva factura / boleta" para empezar.</div></div>}
+
+    {grupos.map(([k,items])=><div key={k}>
+      <div className="mh">
+        <span style={{textTransform:"capitalize"}}>{mesLabel(k)}</span>
+        <span style={{fontFamily:"'JetBrains Mono',monospace",color:"#FF5A5A"}}>
+          IVA {CLP(items.filter(f=>f.tipo!=="boleta").reduce((s,f)=>s+f.impuesto,0))}
+        </span>
+      </div>
+      {items.map(f=>{
+        const td2=TIPOS_DOC[f.tipo]||TIPOS_DOC.factura;
+        const s30=addDays(f.fecha,30);
+        return <div key={f.id} className="row" style={{alignItems:"flex-start"}}>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{display:"flex",gap:6,alignItems:"center",marginBottom:4}}>
+              <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:9,background:`${td2.color}18`,color:td2.color,padding:"1px 7px",borderRadius:9999,letterSpacing:".06em",textTransform:"uppercase"}}>{td2.etiqueta}</span>
+            </div>
+            <div style={{fontWeight:700,fontSize:14,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{f.cliente}</div>
+            <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:"rgba(255,255,255,.35)",marginTop:3}}>{f.fecha}{f.numero?` · N°${f.numero}`:""}</div>
+            {f.tipo!=="boleta"&&<div style={{display:"flex",gap:5,marginTop:6,flexWrap:"wrap"}}>
+              <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:9,background:"var(--blue-bg)",color:"#4D9EFF",padding:"2px 8px",borderRadius:9999}}>Anticipo: {CLP(Math.round(f.bruto*.5))}</span>
+              <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:9,background:"var(--green-bg)",color:"#00C48C",padding:"2px 8px",borderRadius:9999}}>Saldo {fmtDate(s30)}: {CLP(Math.round(f.bruto*.5))}</span>
+            </div>}
+            {f.tipo==="boleta"&&<div style={{marginTop:6}}>
+              <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:9,background:"rgba(192,132,252,.1)",color:"#C084FC",padding:"2px 8px",borderRadius:9999}}>Cobras: {CLP(f.neto)} · Retención SII: {CLP(f.impuesto)}</span>
+            </div>}
+          </div>
+          <div style={{textAlign:"right",flexShrink:0}}>
+            <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:14,fontWeight:500,color:"#fff"}}>{CLP(f.bruto)}</div>
+            <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:td2.color,marginTop:2}}>{td2.etiqueta} {CLP(f.impuesto)}</div>
+          </div>
+          <button className="del" onClick={()=>del(f.id)}>×</button>
+        </div>;
+      })}
+    </div>)}
+  </div>;
+}
+
+/* ══ CALENDARIO ══ */
+function Calendario({fac,cob}){
+  // Solo facturas (no boletas) tienen lógica de anticipo/saldo
+  const todos=useMemo(()=>{
+    const items=[];
+    fac.forEach(f=>{
+      const cobFac=cob.filter(c=>c.ref&&c.ref.toLowerCase().includes(f.cliente.split("—")[0].trim().toLowerCase()));
+      const cobrado=cobFac.reduce((s,c)=>s+c.monto,0);
+      if(f.tipo==="boleta"){
+        items.push({fecha:parseLocal(f.fecha),label:`Boleta honorarios — ${f.cliente}`,monto:f.neto,tipo:"boleta",cobrado:cobrado>=f.neto*.9});
+      } else {
+        items.push({fecha:parseLocal(f.fecha),label:`Anticipo 50% — ${f.cliente}`,monto:Math.round(f.bruto*.5),tipo:"anticipo",cobrado:cobrado>=f.bruto*.49});
+        items.push({fecha:addDays(f.fecha,30),label:`Saldo final — ${f.cliente}`,monto:Math.round(f.bruto*.5),tipo:"final",cobrado:cobrado>=f.bruto*.99});
+      }
+    });
+    return items.sort((a,b)=>a.fecha-b.fecha);
+  },[fac,cob]);
+
+  if(!todos.length)return <div className="card empty" style={{borderRadius:20}}><div className="empty-t">Sin cobros estimados</div><div className="empty-s">Agrega facturas para ver fechas de pago.</div></div>;
+
+  return <div style={{display:"grid",gap:8}}>
+    {todos.map((item,i)=>{
+      const dias=diasHasta(item.fecha);const vencida=dias<0&&!item.cobrado;
+      const bg=item.cobrado?"var(--green-bg)":vencida?"var(--red-bg)":"var(--card)";
+      const bdr=item.cobrado?"rgba(0,196,140,.2)":vencida?"rgba(255,90,90,.2)":"rgba(255,255,255,.08)";
+      const color=item.cobrado?"#00C48C":vencida?"#FF5A5A":"#fff";
+      return <div key={i} style={{display:"flex",alignItems:"center",gap:14,background:bg,border:`1px solid ${bdr}`,borderRadius:12,padding:"13px 15px"}}>
+        <div style={{minWidth:58,textAlign:"center",flexShrink:0}}>
+          <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:"rgba(255,255,255,.38)"}}>{item.fecha.toLocaleDateString("es-CL",{day:"numeric",month:"short"})}</div>
+          <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:9,color:vencida?"#FF5A5A":"rgba(255,255,255,.35)",marginTop:1}}>{item.cobrado?"recibido":dias<0?`${Math.abs(dias)}d atrás`:`en ${dias}d`}</div>
+        </div>
+        <div style={{width:1,height:28,background:"rgba(255,255,255,.08)",flexShrink:0}}/>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:13,fontWeight:600,color,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.label}</div>
+          <div style={{marginTop:4}}>
+            {item.cobrado?<Pill tone="green">cobrado</Pill>:item.tipo==="anticipo"?<Pill tone="blue">anticipo 50%</Pill>:item.tipo==="boleta"?<Pill tone="purple">boleta honorarios</Pill>:<Pill tone={vencida?"red":dias<=5?"amber":"gray"}>saldo final</Pill>}
+          </div>
+        </div>
+        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:14,color,fontWeight:500,flexShrink:0}}>{CLP(item.monto)}</div>
+      </div>;
+    })}
+  </div>;
+}
+
+/* ══ ENTRADAS ══ */
+function Entradas({cob,setCob}){
+  const[sf,setSf]=useState(false);
+  const[fecha,setFecha]=useState(todayISO());
+  const[monto,setMonto]=useState("");
+  const[tipo,setTipo]=useState("Anticipo 50%");
+  const[ref,setRef]=useState("");
+  const TIPOS=[["Anticipo 50%","amber"],["Pago final","green"],["Pago total","green"],["Boleta cobrada","purple"],["Otro","gray"]];
+  const add=()=>{const v=Number(String(monto).replace(/[^\d]/g,""));if(!v)return;setCob(a=>[{id:uid(),fecha,monto:v,tipo,ref:ref.trim()},...a]);setMonto("");setRef("");setSf(false);};
+  const del=id=>setCob(a=>a.filter(c=>c.id!==id));
+  const grupos=useMemo(()=>{const g={};cob.forEach(c=>{const k=monthKey(c.fecha);(g[k]=g[k]||[]).push(c);});return Object.keys(g).sort().reverse().map(k=>[k,g[k]]);},[cob]);
+
+  return <div style={{display:"grid",gap:12}}>
+    {!sf&&<button className="btn-w" style={{borderRadius:12,padding:"13px"}} onClick={()=>setSf(true)}>+ Me llegó plata</button>}
+    {sf&&<div className="card" style={{borderRadius:16}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:9,letterSpacing:".1em",textTransform:"uppercase",color:"rgba(255,255,255,.38)"}}>Nueva entrada</div>
+        <button onClick={()=>setSf(false)} style={{border:"none",background:"transparent",fontSize:22,color:"rgba(255,255,255,.38)",lineHeight:1}}>×</button>
+      </div>
+      <div style={{display:"grid",gap:10}}>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          <input className="inp" type="date" value={fecha} onChange={e=>setFecha(e.target.value)}/>
+          <input className="inp" inputMode="numeric" placeholder="Monto recibido" value={monto} onChange={e=>setMonto(e.target.value)} style={{fontFamily:"'JetBrains Mono',monospace"}}/>
+        </div>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+          {TIPOS.map(([t,tone])=><button key={t} className={`btn-g${tipo===t?" on":""}`} onClick={()=>setTipo(t)} style={{fontSize:11,padding:"8px 11px"}}>{t}</button>)}
+        </div>
+        <input className="inp" placeholder="Referencia (cliente, proyecto...)" value={ref} onChange={e=>setRef(e.target.value)}/>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          <button className="btn-w" onClick={add}>Registrar</button>
+          <button className="btn-cancel" onClick={()=>setSf(false)}>Cancelar</button>
+        </div>
+      </div>
+    </div>}
+    {cob.length===0&&!sf&&<div className="card empty" style={{borderRadius:16}}><div className="empty-t">Sin entradas</div><div className="empty-s">Registra los pagos que recibes aquí.</div></div>}
+    {grupos.map(([k,items])=><div key={k}>
+      <div className="mh"><span style={{textTransform:"capitalize"}}>{mesLabel(k)}</span><span style={{fontFamily:"'JetBrains Mono',monospace",color:"#00C48C"}}>{CLP(items.reduce((s,c)=>s+c.monto,0))}</span></div>
+      {items.map(c=>{const tc=TIPOS.find(t=>t[0]===c.tipo)||TIPOS[4];return <div key={c.id} className="row">
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{display:"flex",gap:7,alignItems:"center"}}><Pill tone={tc[1]}>{c.tipo}</Pill><span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:"rgba(255,255,255,.35)"}}>{c.fecha}</span></div>
+          {c.ref&&<div style={{fontSize:12,color:"rgba(255,255,255,.35)",marginTop:4}}>{c.ref}</div>}
+        </div>
+        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:14,color:"#00C48C",fontWeight:500,flexShrink:0}}>{CLP(c.monto)}</div>
+        <button className="del" onClick={()=>del(c.id)}>×</button>
+      </div>;})}
+    </div>)}
+  </div>;
+}
+
+/* ══ COMPRAS ══ */
+function Compras({com,setCom}){
+  const[sf,setSf]=useState(false);
+  const[fecha,setFecha]=useState(todayISO());
+  const[proveedor,setProveedor]=useState("");
+  const[monto,setMonto]=useState("");
+  const[modo,setModo]=useState("neto");
+  const IVA=0.19;
+  const add=()=>{const v=Number(String(monto).replace(/[^\d]/g,""));if(!v||!proveedor.trim())return;let neto,iva,bruto;if(modo==="neto"){neto=v;iva=Math.round(v*IVA);bruto=v+iva;}else{bruto=v;neto=Math.round(v/(1+IVA));iva=bruto-neto;}setCom(a=>[{id:uid(),fecha,proveedor:proveedor.trim(),numero:"",neto,iva,bruto},...a]);setProveedor("");setMonto("");setSf(false);};
+  const del=id=>setCom(a=>a.filter(c=>c.id!==id));
+  const prev=useMemo(()=>{const v=Number(String(monto).replace(/[^\d]/g,""))||0;const neto=modo==="neto"?v:Math.round(v/(1+IVA));return{neto,iva:Math.round(neto*IVA)};},[monto,modo]);
+  const grupos=useMemo(()=>{const g={};com.forEach(c=>{const k=monthKey(c.fecha);(g[k]=g[k]||[]).push(c);});return Object.keys(g).sort().reverse().map(k=>[k,g[k]]);},[com]);
+
+  return <div style={{display:"grid",gap:12}}>
+    <div style={{background:"var(--green-bg)",border:"1px solid rgba(0,196,140,.2)",borderRadius:12,padding:"12px 15px",fontSize:11,color:"#00C48C",lineHeight:1.7}}>
+      Facturas que <strong>te emiten a ti</strong> con IVA. El IVA de estas facturas se resta del que pagas al SII — puede bajar tu F29 significativamente.
+    </div>
+    {!sf&&<button className="add-btn" onClick={()=>setSf(true)}>+ Agregar factura de proveedor</button>}
+    {sf&&<div className="card" style={{borderRadius:16}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:9,letterSpacing:".1em",textTransform:"uppercase",color:"rgba(255,255,255,.38)"}}>Nueva compra con factura</div>
+        <button onClick={()=>setSf(false)} style={{border:"none",background:"transparent",fontSize:22,color:"rgba(255,255,255,.38)",lineHeight:1}}>×</button>
+      </div>
+      <div style={{display:"grid",gap:10}}>
+        <input className="inp" placeholder="Proveedor" value={proveedor} onChange={e=>setProveedor(e.target.value)} autoFocus/>
+        <input className="inp" type="date" value={fecha} onChange={e=>setFecha(e.target.value)}/>
+        <div style={{display:"flex",gap:6}}>
+          {[["neto","Neto"],["bruto","Total c/IVA"]].map(([id,l])=><button key={id} className={`btn-g${modo===id?" on":""}`} onClick={()=>setModo(id)} style={{flex:1}}>{l}</button>)}
+        </div>
+        <input className="inp" inputMode="numeric" placeholder={modo==="neto"?"Monto neto":"Total con IVA"} value={monto} onChange={e=>setMonto(e.target.value)} style={{fontFamily:"'JetBrains Mono',monospace"}}/>
+        {monto&&<div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:"rgba(255,255,255,.4)",background:"rgba(255,255,255,.03)",padding:"10px 13px",borderRadius:9}}>Neto {CLP(prev.neto)}  ·  IVA crédito {CLP(prev.iva)}</div>}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          <button className="btn-w" onClick={add}>Agregar</button>
+          <button className="btn-cancel" onClick={()=>setSf(false)}>Cancelar</button>
+        </div>
+      </div>
+    </div>}
+    {com.length===0&&!sf&&<div className="card empty" style={{borderRadius:16}}><div className="empty-t">Sin compras</div><div className="empty-s">Agrega facturas de proveedores para bajar tu IVA.</div></div>}
+    {grupos.map(([k,items])=><div key={k}>
+      <div className="mh"><span style={{textTransform:"capitalize"}}>{mesLabel(k)}</span><span style={{fontFamily:"'JetBrains Mono',monospace",color:"#00C48C"}}>Crédito {CLP(items.reduce((s,c)=>s+c.iva,0))}</span></div>
+      {items.map(c=><div key={c.id} className="row">
+        <div style={{flex:1}}><div style={{fontWeight:700,fontSize:14,color:"#fff"}}>{c.proveedor}</div><div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:"rgba(255,255,255,.35)",marginTop:2}}>{c.fecha}</div></div>
+        <div style={{textAlign:"right",flexShrink:0}}>
+          <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:14,fontWeight:500,color:"#fff"}}>{CLP(c.bruto)}</div>
+          <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:"#00C48C",marginTop:2}}>Crédito {CLP(c.iva)}</div>
+        </div>
+        <button className="del" onClick={()=>del(c.id)}>×</button>
+      </div>)}
+    </div>)}
+  </div>;
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
